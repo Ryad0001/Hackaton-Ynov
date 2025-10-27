@@ -1,0 +1,16 @@
+ID,ValueA,ValueB,Category
+1,40,50,Wave
+2,50,55,Wave
+3,60,45,Wave
+4,45,60,Wave
+5,55,40,Wave
+6,48,52,Wave
+7,52,48,Wave
+8,10,80,Drip
+9,15,90,Drip
+10,20,75,Drip
+11,80,70,Drip
+12,85,85,Drip
+13,90,95,Drip
+14,95,80,Drip
+15,50,40,Drip
