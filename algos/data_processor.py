@@ -13,6 +13,51 @@ import os                        # Ajout pour la gestion des fichiers
 
 # --- 1. Traitement des Données ---
 
+def normalise_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalise automatiquement un DataFrame avec des choix intelligents des colonnes.
+    Reprend la logique de normaliser_csv du notebook.
+    
+    Args:
+        df: DataFrame à normaliser
+        
+    Returns:
+        DataFrame normalisé avec les colonnes : Category, ValueA, ValueB
+    """
+    # Nettoyer les noms de colonnes (minuscules + suppression des espaces)
+    df.columns = [col.strip().lower() for col in df.columns]
+    
+    # Détecter colonnes numériques et textuelles
+    colonnes_num = df.select_dtypes(include=["number"]).columns.tolist()
+    colonnes_text = df.select_dtypes(exclude=["number"]).columns.tolist()
+    
+    # Vérifications
+    if len(colonnes_text) < 1:
+        raise ValueError("Le fichier doit contenir au moins une colonne texte.")
+    
+    if len(colonnes_num) < 2:
+        raise ValueError("Le fichier doit contenir au moins deux colonnes numériques.")
+    
+    # Choix intelligent :
+    # - La première colonne texte devient "Category"
+    # - La première colonne numérique devient "ValueA"
+    # - La deuxième colonne numérique devient "ValueB"
+    cat_col = colonnes_text[0]
+    valuea_col = colonnes_num[0]
+    valueb_col = colonnes_num[1] if len(colonnes_num) > 1 else colonnes_num[0]
+    
+    # Création du DataFrame normalisé
+    df_normalise = pd.DataFrame({
+        "Category": df[cat_col],
+        "ValueA": df[valuea_col],
+        "ValueB": df[valueb_col]
+    })
+    
+    print(f"✅ Normalisation : '{cat_col}' → Category, '{valuea_col}' → ValueA, '{valueb_col}' → ValueB")
+    
+    return df_normalise
+
+
 def process_data(uploaded_file) -> Dict[str, Any]:
     """
     Traite les données du fichier uploadé.
@@ -36,11 +81,39 @@ def process_data(uploaded_file) -> Dict[str, Any]:
             if df.empty:
                 return {"error": "Le fichier CSV est vide"}
             
-            # Valider les colonnes nécessaires
+            # Valider les colonnes nécessaires - Essayer d'abord la normalisation intelligente
             required_cols = ['Category', 'ValueA', 'ValueB']
             if not all(col in df.columns for col in required_cols):
-                return {"error": f"Colonnes manquantes. Assurez-vous d'avoir: {required_cols}"}
+                print("🔄 Colonnes non standardisées détectées. Application de la normalisation intelligente...")
+                try:
+                    df = normalise_dataframe(df)
+                except Exception as normalise_error:
+                    return {"error": f"Impossible de normaliser les colonnes : {normalise_error}"}
 
+            # Valider et normaliser les catégories
+            valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
+            
+            # Vérifier si toutes les catégories sont valides
+            unique_categories = df['Category'].unique()
+            invalid_categories = [cat for cat in unique_categories if cat not in valid_categories]
+            
+            if invalid_categories:
+                print(f"⚠️  Catégories non valides détectées : {invalid_categories}")
+                print("🔄 Attribution aléatoire des catégories valides...")
+                
+                # Remplacer les catégories invalides par des catégories valides aléatoires
+                for cat in invalid_categories:
+                    df.loc[df['Category'] == cat, 'Category'] = random.choice(valid_categories)
+                
+                print(f"✅ Catégories normalisées : {df['Category'].unique()}")
+            
+            # Gestion d'erreur : si après normalisation il n'y a toujours pas de catégories valides
+            if len(df['Category'].unique()) == 0 or not any(cat in df['Category'].values for cat in valid_categories):
+                print("⚠️  Aucune catégorie valide après normalisation.")
+                print("🔄 Attribution de catégories aléatoires à toutes les lignes...")
+                df['Category'] = [random.choice(valid_categories) for _ in range(len(df))]
+                print(f"✅ Toutes les lignes ont maintenant une catégorie valide.")
+            
             return {
                 "type": "csv",
                 "shape": df.shape,
@@ -58,10 +131,38 @@ def process_data(uploaded_file) -> Dict[str, Any]:
             if df.empty:
                 return {"error": "Le fichier JSON est vide ou mal formaté"}
                 
-            # Valider les colonnes
+            # Valider les colonnes - Essayer d'abord la normalisation intelligente
             required_cols = ['Category', 'ValueA', 'ValueB']
             if not all(col in df.columns for col in required_cols):
-                return {"error": f"Colonnes manquantes. Assurez-vous d'avoir: {required_cols}"}
+                print("🔄 Colonnes non standardisées détectées. Application de la normalisation intelligente...")
+                try:
+                    df = normalise_dataframe(df)
+                except Exception as normalise_error:
+                    return {"error": f"Impossible de normaliser les colonnes : {normalise_error}"}
+                
+            # Valider et normaliser les catégories
+            valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
+            
+            # Vérifier si toutes les catégories sont valides
+            unique_categories = df['Category'].unique()
+            invalid_categories = [cat for cat in unique_categories if cat not in valid_categories]
+            
+            if invalid_categories:
+                print(f"⚠️  Catégories non valides détectées : {invalid_categories}")
+                print("🔄 Attribution aléatoire des catégories valides...")
+                
+                # Remplacer les catégories invalides par des catégories valides aléatoires
+                for cat in invalid_categories:
+                    df.loc[df['Category'] == cat, 'Category'] = random.choice(valid_categories)
+                
+                print(f"✅ Catégories normalisées : {df['Category'].unique()}")
+            
+            # Gestion d'erreur : si après normalisation il n'y a toujours pas de catégories valides
+            if len(df['Category'].unique()) == 0 or not any(cat in df['Category'].values for cat in valid_categories):
+                print("⚠️  Aucune catégorie valide après normalisation.")
+                print("🔄 Attribution de catégories aléatoires à toutes les lignes...")
+                df['Category'] = [random.choice(valid_categories) for _ in range(len(df))]
+                print(f"✅ Toutes les lignes ont maintenant une catégorie valide.")
                 
             return {
                 "type": "json",
@@ -100,11 +201,21 @@ def generate_art(processed_data: Dict[str, Any], background_style: str = 'light'
 
     # Vérifier si les données sont valides
     if "dataframe" not in processed_data:
-        print("Erreur : DataFrame non trouvé dans processed_data.")
-        # Vous pourriez retourner une image d'erreur par défaut ici
+        print("❌ Erreur : DataFrame non trouvé dans processed_data.")
         return "" 
 
     df = processed_data['dataframe']
+    
+    # Vérifier qu'il y a au moins une catégorie valide
+    valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
+    if not any(cat in df['Category'].values for cat in valid_categories):
+        print("❌ Erreur : Aucune catégorie valide trouvée dans les données.")
+        print("Les catégories doivent être : Stroke, Gesture, Drip ou Wave")
+        return ""
+    
+    # Compter les catégories valides présentes
+    present_categories = df[df['Category'].isin(valid_categories)]['Category'].unique()
+    print(f"✅ Catégories détectées : {present_categories}")
 
     # --- DÉBUT DE L'ALGORITHME DE GÉNÉRATION "ARTISTE ABSTRAIT" ---
     WIDTH = 10
