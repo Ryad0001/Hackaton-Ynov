@@ -88,28 +88,35 @@ def main():
                 if st.button("✨ Générer l'Œuvre d'Art", type="primary", use_container_width=True):
                     with st.spinner("🔄 Génération de l'œuvre d'art en cours..."):
                         try:
-                            # Simuler la génération
+                            # Générer l'œuvre d'art
                             art_path = generate_art(processed_data)
                             
-                            st.success("✅ Génération Réussie !")
-                            
-                            st.markdown("---")
-                            
-                            # Afficher le placeholder de l'image
-                            st.subheader("🎨 Votre Œuvre d'Art Générée")
-                            
-                            # Placeholder d'image
-                            st.image(
-                                "https://via.placeholder.com/800x600/4A90E2/FFFFFF?text=Oeuvre+d%27art+generée",
-                                caption="Votre œuvre d'art générée à partir de vos données",
-                                use_container_width=True
-                            )
-                            
-                            # Informations sur la génération
-                            st.info("""
-                            ℹ️ **Note :** Cette image est un placeholder. 
-                            L'algorithme de génération d'art abstrait sera implémenté prochainement.
-                            """)
+                            if art_path and os.path.exists(art_path):
+                                st.success("✅ Génération Réussie !")
+                                
+                                st.markdown("---")
+                                
+                                # Afficher l'œuvre d'art générée
+                                st.subheader("🎨 Votre Œuvre d'Art Générée")
+                                
+                                # Afficher l'image générée
+                                st.image(
+                                    art_path,
+                                    caption="Votre œuvre d'art générée à partir de vos données",
+                                    use_container_width=True
+                                )
+                                
+                                # Bouton pour télécharger l'image
+                                with open(art_path, "rb") as img_file:
+                                    st.download_button(
+                                        label="📥 Télécharger l'image",
+                                        data=img_file,
+                                        file_name="generated_art.png",
+                                        mime="image/png",
+                                        use_container_width=True
+                                    )
+                            else:
+                                st.error("❌ Erreur : L'image générée n'a pas pu être créée.")
                             
                         except Exception as e:
                             st.error(f"❌ Erreur lors de la génération : {str(e)}")

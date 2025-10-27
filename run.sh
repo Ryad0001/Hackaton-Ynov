@@ -23,14 +23,18 @@ else
     exit 1
 fi
 
-# Détecter la commande streamlit
-if ! command -v streamlit &> /dev/null
-then
-    echo "❌ Streamlit n'est pas installé."
-    echo "📦 Installation des dépendances..."
-    $PIP_CMD install -r requirements.txt
+# Installer ou mettre à jour les dépendances
+echo "📦 Vérification et installation des dépendances..."
+$PIP_CMD install --upgrade -r requirements.txt
+if [ $? -eq 0 ]; then
+    echo "✅ Dépendances installées avec succès !"
     echo ""
+else
+    echo "❌ Erreur lors de l'installation des dépendances."
+    echo "Veuillez vérifier vos configurations Python et pip."
+    exit 1
 fi
+echo ""
 
 # Lancer l'application
 echo "🚀 Lancement de l'application..."
