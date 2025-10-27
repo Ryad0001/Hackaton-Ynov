@@ -137,7 +137,7 @@ def main():
         """)
         
         st.markdown("---")
-        st.markdown("Made with ❤️ for the Hackathon")
+        st.markdown("Fait par Oubay, Adam, Ryad et Azad")
     
     # Footer
     st.markdown("---")
