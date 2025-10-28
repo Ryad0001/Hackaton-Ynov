@@ -1,80 +1,38 @@
-"""
-Module de traitement des données et de génération d'art pour ANTKATHON
-Refactorisé pour une utilisation avec Streamlit.
-Utilise l'algorithme "Splash Art" (basé sur Pillow) avec couleurs HSV
-et rendu déterministe.
-"""
-
 import pandas as pd
 import json
 from typing import Union, Dict, Any
 import os
 import random
 import math
-import colorsys  # Ajout pour la génération de couleurs HSV
-
-# --- Imports pour la génération d'art (Pillow) ---
+import colorsys
 from PIL import Image, ImageDraw
 
-# --- 1. Traitement des Données ---
-
 def normalise_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalise automatiquement un DataFrame avec des choix intelligents des colonnes,
-    basé sur l'algorithme "Splash".
-    
-    Args:
-        df: DataFrame à normaliser
-        
-    Returns:
-        DataFrame normalisé avec les colonnes : Category, ValueA, ValueB
-        
-    Raises:
-        ValueError: Si les conditions (colonnes) ne sont pas remplies.
-    """
-    # Nettoyer les noms de colonnes
     df.columns = [str(col).strip().lower() for col in df.columns]
     
-    # Détecter colonnes numériques et textuelles
     colonnes_num = df.select_dtypes(include=["number"]).columns.tolist()
     colonnes_text = df.select_dtypes(exclude=["number"]).columns.tolist()
     
-    # Vérifications (Amélioration de la gestion d'erreur)
     if len(colonnes_num) < 2:
-        raise ValueError("Le fichier doit contenir au moins deux colonnes numériques (pour 'Coordonnees' et 'Couleur').")
-    
-    # Création du DataFrame normalisé
-    new_df = pd.DataFrame()
+        raise ValueError("Le fichier doit contenir au moins deux colonnes numériques.")
     
     cat_col = colonnes_text[0] if len(colonnes_text) > 0 else "categorie_inconnue"
     valA_col = colonnes_num[0]
     valB_col = colonnes_num[1]
 
+    new_df = pd.DataFrame()
     new_df["Category"] = df[cat_col] if len(colonnes_text) > 0 else "Inconnue"
-    new_df["ValueA"] = df[valA_col] # Sera 'Coordonnees'
-    new_df["ValueB"] = df[valB_col] # Sera 'Couleur'
-    
-    print(f"✅ Normalisation : '{cat_col}' → Category, '{valA_col}' → ValueA, '{valB_col}' → ValueB")
+    new_df["ValueA"] = df[valA_col]
+    new_df["ValueB"] = df[valB_col]
     
     return new_df
 
 
 def process_data(uploaded_file) -> Dict[str, Any]:
-    """
-    Traite les données du fichier uploadé.
-    Tente une normalisation intelligente des colonnes.
-    
-    Args:
-        uploaded_file: Fichier uploadé via Streamlit
-        
-    Returns:
-        Dict contenant les données traitées ET le DataFrame
-    """
     if uploaded_file is None:
         return {}
     
     filename = uploaded_file.name.lower()
-    df = None
     
     try:
         if filename.endswith('.csv'):
@@ -87,11 +45,9 @@ def process_data(uploaded_file) -> Dict[str, Any]:
         if df.empty:
             return {"error": "Le fichier est vide"}
             
-        # --- GESTION D'ERREUR AMÉLIORÉE ---
         try:
             df_normalise = normalise_dataframe(df)
         except ValueError as e:
-            # Capturer les erreurs de normalisation (ex: "pas assez de colonnes")
             print(f"Erreur de normalisation : {e}")
             return {"error": f"Erreur de normalisation : {e}"}
         
@@ -100,18 +56,14 @@ def process_data(uploaded_file) -> Dict[str, Any]:
             "shape": df_normalise.shape,
             "columns": df_normalise.columns.tolist(),
             "preview": df_normalise.head(5).to_dict('records'),
-            "dataframe": df_normalise  # Le DF normalisé est prêt
+            "dataframe": df_normalise
         }
             
     except Exception as e:
         return {"error": f"Erreur lors de la lecture du fichier : {e}"}
 
 
-# --- 2. Génération de l'Art (Algorithme "Splash Art") ---
-
-# Fonctions utilitaires pour generate_art
 def create_gradient_background(width, height, top_color=(20, 20, 30), bottom_color=(80, 40, 100)):
-    """Crée une image de fond en dégradé vertical (utilisé par generate_art)."""
     img = Image.new("RGB", (width, height), color=0)
     draw = ImageDraw.Draw(img)
     for y in range(height):
@@ -123,7 +75,6 @@ def create_gradient_background(width, height, top_color=(20, 20, 30), bottom_col
     return img
 
 def draw_color_splash(draw: ImageDraw.Draw, x, y, base_color, intensity=1.0, radius=50):
-    """Dessine une 'éclaboussure' de plusieurs gouttes (utilisé par generate_art)."""
     num_drops = int(100 * intensity)
     for _ in range(num_drops):
         angle = random.uniform(0, 2 * math.pi)
@@ -137,7 +88,6 @@ def draw_color_splash(draw: ImageDraw.Draw, x, y, base_color, intensity=1.0, rad
 
         size = random.randint(2, 8)
         draw.ellipse((px - size, py - size, px + size, py + size), fill=(r, g, b))
-# Fin des fonctions utilitaires
 
 
 def generate_art(processed_data: Dict[str, Any], background_style: str = 'dark') -> str:
