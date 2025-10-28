@@ -1,5 +1,9 @@
 # ANTKATHON - Générateur d'Art Abstraît
 
+## Auteurs
+
+Projet développé par **Oubay MOUDDEN, Adam CHOUAG, Ryad MURAD et Azad KARA** dans le cadre du Hackathon Ynov.
+
 ## Description
 
 **ANTKATHON** est une application web interactive qui transforme vos données en œuvres d'art abstrait spectaculaires. Développé dans le cadre d'un hackathon, ce projet utilise des algorithmes de visualisation créative pour convertir des jeux de données en compositions artistiques uniques de style "splash art" (art d'éclaboussure).
@@ -273,10 +277,6 @@ Les fichiers dans le dossier `Dataset/` contiennent des exemples de compositions
 - `composition_1_toile.csv` : Style toile artistique
 - `composition_2_explosion.csv` : Style explosion colorée
 - `composition_3_neon.csv` : Style néon moderne
-
-## Auteurs
-
-Projet développé par **Oubay MOUDDEN, Adam CHOUAG, Ryad MURAD et Azad KARA** dans le cadre du Hackathon Ynov.
 
 ## Licence
 
