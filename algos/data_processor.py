@@ -1,67 +1,67 @@
 """
 Module de traitement des données et de génération d'art pour ANTKATHON
 Refactorisé pour une utilisation avec Streamlit.
+Utilise l'algorithme "Splash Art" basé sur Pillow (PIL) de manière déterministe.
 """
 
 import pandas as pd
 import json
 from typing import Union, Dict, Any
-import matplotlib.pyplot as plt  # Ajout pour la génération
-import numpy as np               # Ajout pour la génération
-import random                    # Ajout pour la génération
-import os                        # Ajout pour la gestion des fichiers
+import os
+import random
+import math
+
+# --- Imports pour la génération d'art (Pillow) ---
+# Matplotlib et Numpy ne sont plus requis pour CET algorithme
+from PIL import Image, ImageDraw
+
 
 # --- 1. Traitement des Données ---
 
 def normalise_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Normalise automatiquement un DataFrame avec des choix intelligents des colonnes.
-    Reprend la logique de normaliser_csv du notebook.
+    Normalise automatiquement un DataFrame avec des choix intelligents des colonnes,
+    basé sur l'algorithme "Splash".
     
     Args:
         df: DataFrame à normaliser
         
     Returns:
         DataFrame normalisé avec les colonnes : Category, ValueA, ValueB
+        
+    Raises:
+        ValueError: Si les conditions (colonnes) ne sont pas remplies.
     """
     # Nettoyer les noms de colonnes (minuscules + suppression des espaces)
-    df.columns = [col.strip().lower() for col in df.columns]
+    df.columns = [str(col).strip().lower() for col in df.columns]
     
     # Détecter colonnes numériques et textuelles
     colonnes_num = df.select_dtypes(include=["number"]).columns.tolist()
     colonnes_text = df.select_dtypes(exclude=["number"]).columns.tolist()
     
-    # Vérifications
-    if len(colonnes_text) < 1:
-        raise ValueError("Le fichier doit contenir au moins une colonne texte.")
-    
+    # Vérifications (Amélioration de la gestion d'erreur)
     if len(colonnes_num) < 2:
-        raise ValueError("Le fichier doit contenir au moins deux colonnes numériques.")
-    
-    # Choix intelligent :
-    # - La première colonne texte devient "Category"
-    # - La première colonne numérique devient "ValueA"
-    # - La deuxième colonne numérique devient "ValueB"
-    cat_col = colonnes_text[0]
-    valuea_col = colonnes_num[0]
-    valueb_col = colonnes_num[1] if len(colonnes_num) > 1 else colonnes_num[0]
+        raise ValueError("Le fichier doit contenir au moins deux colonnes numériques (pour 'Coordonnees' et 'Couleur').")
     
     # Création du DataFrame normalisé
-    df_normalise = pd.DataFrame({
-        "Category": df[cat_col],
-        "ValueA": df[valuea_col],
-        "ValueB": df[valueb_col]
-    })
+    new_df = pd.DataFrame()
     
-    print(f"✅ Normalisation : '{cat_col}' → Category, '{valuea_col}' → ValueA, '{valueb_col}' → ValueB")
+    # - La première colonne texte (si elle existe) devient "Category"
+    new_df["Category"] = df[colonnes_text[0]] if len(colonnes_text) > 0 else "Inconnue"
+    # - La première colonne numérique devient "ValueA" (Coordonnees)
+    new_df["ValueA"] = df[colonnes_num[0]]
+    # - La deuxième colonne numérique devient "ValueB" (Couleur)
+    new_df["ValueB"] = df[colonnes_num[1]]
     
-    return df_normalise
+    print(f"✅ Normalisation : '{colonnes_text[0] if len(colonnes_text) > 0 else 'N/A'}' → Category, '{colonnes_num[0]}' → ValueA, '{colonnes_num[1]}' → ValueB")
+    
+    return new_df
 
 
 def process_data(uploaded_file) -> Dict[str, Any]:
     """
     Traite les données du fichier uploadé.
-    (Refactorisé pour inclure le DataFrame complet dans la sortie)
+    Tente une normalisation intelligente des colonnes.
     
     Args:
         uploaded_file: Fichier uploadé via Streamlit
@@ -73,256 +73,157 @@ def process_data(uploaded_file) -> Dict[str, Any]:
         return {}
     
     filename = uploaded_file.name.lower()
+    df = None
     
-    if filename.endswith('.csv'):
-        try:
+    try:
+        if filename.endswith('.csv'):
             df = pd.read_csv(uploaded_file)
-            
-            if df.empty:
-                return {"error": "Le fichier CSV est vide"}
-            
-            # Valider les colonnes nécessaires - Essayer d'abord la normalisation intelligente
-            required_cols = ['Category', 'ValueA', 'ValueB']
-            if not all(col in df.columns for col in required_cols):
-                print("🔄 Colonnes non standardisées détectées. Application de la normalisation intelligente...")
-                try:
-                    df = normalise_dataframe(df)
-                except Exception as normalise_error:
-                    return {"error": f"Impossible de normaliser les colonnes : {normalise_error}"}
-
-            # Valider et normaliser les catégories
-            valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
-            
-            # Vérifier si toutes les catégories sont valides
-            unique_categories = df['Category'].unique()
-            invalid_categories = [cat for cat in unique_categories if cat not in valid_categories]
-            
-            if invalid_categories:
-                print(f"⚠️  Catégories non valides détectées : {invalid_categories}")
-                print("🔄 Attribution aléatoire des catégories valides...")
-                
-                # Remplacer les catégories invalides par des catégories valides aléatoires
-                for cat in invalid_categories:
-                    df.loc[df['Category'] == cat, 'Category'] = random.choice(valid_categories)
-                
-                print(f"✅ Catégories normalisées : {df['Category'].unique()}")
-            
-            # Gestion d'erreur : si après normalisation il n'y a toujours pas de catégories valides
-            if len(df['Category'].unique()) == 0 or not any(cat in df['Category'].values for cat in valid_categories):
-                print("⚠️  Aucune catégorie valide après normalisation.")
-                print("🔄 Attribution de catégories aléatoires à toutes les lignes...")
-                df['Category'] = [random.choice(valid_categories) for _ in range(len(df))]
-                print(f"✅ Toutes les lignes ont maintenant une catégorie valide.")
-            
-            return {
-                "type": "csv",
-                "shape": df.shape,
-                "columns": df.columns.tolist(),
-                "preview": df.head(5).to_dict('records'),
-                "dataframe": df  # <-- MODIFICATION CLÉ: Ajout du DF complet
-            }
-        except Exception as e:
-            return {"error": f"Erreur lors de la lecture du CSV : {e}"}
-    
-    elif filename.endswith('.json'):
-        try:
+        elif filename.endswith('.json'):
             df = pd.read_json(uploaded_file)
+        else:
+            return {"error": f"Format de fichier non supporté : {filename}"}
             
-            if df.empty:
-                return {"error": "Le fichier JSON est vide ou mal formaté"}
-                
-            # Valider les colonnes - Essayer d'abord la normalisation intelligente
-            required_cols = ['Category', 'ValueA', 'ValueB']
-            if not all(col in df.columns for col in required_cols):
-                print("🔄 Colonnes non standardisées détectées. Application de la normalisation intelligente...")
-                try:
-                    df = normalise_dataframe(df)
-                except Exception as normalise_error:
-                    return {"error": f"Impossible de normaliser les colonnes : {normalise_error}"}
-                
-            # Valider et normaliser les catégories
-            valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
+        if df.empty:
+            return {"error": "Le fichier est vide"}
             
-            # Vérifier si toutes les catégories sont valides
-            unique_categories = df['Category'].unique()
-            invalid_categories = [cat for cat in unique_categories if cat not in valid_categories]
-            
-            if invalid_categories:
-                print(f"⚠️  Catégories non valides détectées : {invalid_categories}")
-                print("🔄 Attribution aléatoire des catégories valides...")
-                
-                # Remplacer les catégories invalides par des catégories valides aléatoires
-                for cat in invalid_categories:
-                    df.loc[df['Category'] == cat, 'Category'] = random.choice(valid_categories)
-                
-                print(f"✅ Catégories normalisées : {df['Category'].unique()}")
-            
-            # Gestion d'erreur : si après normalisation il n'y a toujours pas de catégories valides
-            if len(df['Category'].unique()) == 0 or not any(cat in df['Category'].values for cat in valid_categories):
-                print("⚠️  Aucune catégorie valide après normalisation.")
-                print("🔄 Attribution de catégories aléatoires à toutes les lignes...")
-                df['Category'] = [random.choice(valid_categories) for _ in range(len(df))]
-                print(f"✅ Toutes les lignes ont maintenant une catégorie valide.")
-                
-            return {
-                "type": "json",
-                "shape": df.shape,
-                "columns": df.columns.tolist(),
-                "preview": df.head(5).to_dict('records'),
-                "dataframe": df  # <-- MODIFICATION CLÉ: Ajout du DF complet
-            }
-        except Exception as e:
-            return {"error": f"Erreur lors de la lecture du JSON : {e}"}
-    
-    else:
-        # Erreur gérée par validate_file_type, mais on double la sécurité
-        return {"error": f"Format de fichier non supporté : {filename}"}
-
-
-# --- 2. Génération de l'Art ---
-
-def generate_art(processed_data: Dict[str, Any], background_style: str = 'light') -> str:
-    """
-    Génère une œuvre d'art à partir des données traitées en utilisant
-    l'algorithme "Artiste Abstrait" (multi-mode).
-    
-    Args:
-        processed_data: Dictionnaire sortant de process_data
-        background_style: 'light' ou 'dark' pour le fond de la toile
+        # --- GESTION D'ERREUR AMÉLIORÉE ---
+        # Tenter la normalisation intelligente
+        try:
+            df_normalise = normalise_dataframe(df)
+        except ValueError as e:
+            # Capturer les erreurs de normalisation (ex: "pas assez de colonnes")
+            print(f"Erreur de normalisation : {e}")
+            return {"error": f"Erreur de normalisation : {e}"}
         
-    Returns:
-        Chemin vers l'image générée
+        # Si la normalisation réussit :
+        return {
+            "type": "csv" if filename.endswith('.csv') else "json",
+            "shape": df_normalise.shape,
+            "columns": df_normalise.columns.tolist(),
+            "preview": df_normalise.head(5).to_dict('records'),
+            "dataframe": df_normalise  # <-- Le DF normalisé est prêt
+        }
+            
+    except Exception as e:
+        # Erreur générale de lecture de fichier
+        return {"error": f"Erreur lors de la lecture du fichier : {e}"}
+
+
+# --- 2. Génération de l'Art (Algorithme "Splash Art") ---
+
+def create_gradient_background(width, height, top_color=(20, 20, 30), bottom_color=(80, 40, 100)):
+    """Crée une image de fond en dégradé vertical (utilisé par generate_art)."""
+    img = Image.new("RGB", (width, height), color=0)
+    draw = ImageDraw.Draw(img)
+    for y in range(height):
+        ratio = y / height
+        r = int(top_color[0] * (1 - ratio) + bottom_color[0] * ratio)
+        g = int(top_color[1] * (1 - ratio) + bottom_color[1] * ratio)
+        b = int(top_color[2] * (1 - ratio) + bottom_color[2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    return img
+
+
+def draw_color_splash(draw: ImageDraw.Draw, x, y, base_color, intensity=1.0, radius=50):
+    """Dessine une 'éclaboussure' de plusieurs gouttes (utilisé par generate_art)."""
+    num_drops = int(100 * intensity)
+    for _ in range(num_drops):
+        angle = random.uniform(0, 2 * math.pi)
+        dist = random.uniform(0, radius)
+        px = x + math.cos(angle) * dist
+        py = y + math.sin(angle) * dist
+
+        r = min(255, max(0, base_color[0] + random.randint(-30, 30)))
+        g = min(255, max(0, base_color[1] + random.randint(-30, 30)))
+        b = min(255, max(0, base_color[2] + random.randint(-30, 30)))
+
+        size = random.randint(2, 8)
+        draw.ellipse((px - size, py - size, px + size, py + size), fill=(r, g, b))
+
+
+def generate_art(processed_data: Dict[str, Any], background_style: str = 'dark') -> str:
+    """
+    Génère une œuvre d'art "Splash Art" à partir des données traitées.
+    (Utilise Pillow, non Matplotlib)
     """
     
-    # S'assurer que le dossier de sortie existe
     output_dir = "data"
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "generated_art.png")
 
-    # Vérifier si les données sont valides
     if "dataframe" not in processed_data:
         print("❌ Erreur : DataFrame non trouvé dans processed_data.")
         return "" 
 
     df = processed_data['dataframe']
     
-    # Vérifier qu'il y a au moins une catégorie valide
-    valid_categories = ['Stroke', 'Gesture', 'Drip', 'Wave']
-    if not any(cat in df['Category'].values for cat in valid_categories):
-        print("❌ Erreur : Aucune catégorie valide trouvée dans les données.")
-        print("Les catégories doivent être : Stroke, Gesture, Drip ou Wave")
-        return ""
-    
-    # Compter les catégories valides présentes
-    present_categories = df[df['Category'].isin(valid_categories)]['Category'].unique()
-    print(f"✅ Catégories détectées : {present_categories}")
+    # Dimensions de l'image
+    WIDTH = 1000
+    HEIGHT = 700
 
-    # --- DÉBUT DE L'ALGORITHME DE GÉNÉRATION "ARTISTE ABSTRAIT" ---
-    WIDTH = 10
-    HEIGHT = 10
-    DPI = 300 
+    # --- DÉBUT DE L'ALGORITHME "SPLASH ART" ---
     
-    fig, ax = plt.subplots(figsize=(WIDTH, HEIGHT), dpi=DPI)
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 100)
-    ax.axis('off')
-
-    # Style de fond (toile)
-    if background_style == 'dark':
-        ax.set_facecolor('#0a0a1a') # Fond sombre (style "Tech")
+    # 1. Fond dégradé (le style 'dark'/'light' est ignoré ici, on utilise le dégradé par défaut)
+    if background_style == 'light':
+        # Option pour un fond clair si vous le souhaitez
+        background = create_gradient_background(WIDTH, HEIGHT, top_color=(240, 240, 230), bottom_color=(200, 200, 220))
     else:
-        ax.set_facecolor('#f4f0e8') # Fond clair (style "Toile")
+        # Fond sombre par défaut de l'algorithme
+        background = create_gradient_background(WIDTH, HEIGHT, top_color=(20, 20, 30), bottom_color=(80, 40, 100))
 
-    print(f"Génération de l'art... Fond : {background_style}")
+    image = background.convert("RGBA")
+    draw = ImageDraw.Draw(image, "RGBA")
 
-    # --- BOUCLE DE DESSIN PAR CATÉGORIE ---
-    
-    for category, group in df.groupby('Category'):
+    # 2. Normalisation des coordonnées
+    min_coord = df["ValueA"].min()
+    max_coord = df["ValueA"].max()
+    coord_norm = (df["ValueA"] - min_coord) / (max_coord - min_coord + 1e-9) # 1e-9 évite division par zéro
+
+    # 3. Génération des splashs
+    print(f"Génération de {len(df)} éléments 'splash'...")
+    for i, row in df.iterrows():
+
+        # --- GESTION DU RENDU DÉTERMINISTE ---
+        # Initialise le générateur aléatoire en se basant sur le contenu de la ligne
+        random.seed(hash(tuple(row)))
+        # --- FIN DE LA GESTION ---
+
+        # Mappage des données
+        # ValueA (Coordonnees) -> Position X
+        x = int(100 + coord_norm.iloc[i] * (WIDTH - 200)) 
+        # Position Y (aléatoire mais déterministe grâce au seed)
+        y = random.randint(100, HEIGHT - 100)
         
-        print(f"Dessin du calque : {category} ({len(group)} éléments)")
-        
-        try:
-            # --- MODE 1: ONDE (WAVE) ---
-            if category == 'Wave':
-                x_wave = np.linspace(0, 100, 500)
-                for index, row in group.iterrows():
-                    amp = 5 + (row['ValueA'] / 100) * 15
-                    freq = 0.5 + (row['ValueB'] / 100) * 3
-                    y_center = 50 + (row['ValueA'] - 50) / 5
-                    y_wave = amp * np.sin(x_wave / 100 * freq * 2 * np.pi) + y_center
-                    
-                    ax.plot(x_wave, y_wave, color='cyan', linewidth=2.5, alpha=1.0)
-                    ax.plot(x_wave, y_wave, color='white', linewidth=4.5, alpha=0.3)
+        # ValueB (Couleur) -> R, G, B
+        base = int(row["ValueB"])
+        r = int(base % 256)
+        g = int((base * 2) % 256)
+        b = int((255 - base) % 256)
 
-            # --- MODE 2: TOUCHE (STROKE) ---
-            elif category == 'Stroke':
-                for index, row in group.iterrows():
-                    x_pos = row['ValueA']
-                    y_height = row['ValueB']
-                    color = plt.cm.Set3(random.random())
-                    
-                    ax.plot([x_pos, x_pos + random.uniform(-1, 1)], [0, y_height], 
-                            color=color, 
-                            linewidth=15 + (row['ValueA']/100)*20, 
-                            alpha=0.6,
-                            solid_capstyle='butt')
+        # Splash principal
+        radius = random.randint(50, 120)
+        intensity = random.uniform(0.8, 1.4)
+        draw_color_splash(draw, x, y, (r, g, b), intensity=intensity, radius=radius)
 
-            # --- MODE 3: COULURE (DRIP) ---
-            elif category == 'Drip':
-                for index, row in group.iterrows():
-                    x_pos = row['ValueA']
-                    y_length = row['ValueB']
-                    color = plt.cm.hot(random.uniform(0.3, 0.7)) 
-                    
-                    ax.plot([x_pos, x_pos + random.uniform(-0.5, 0.5)], [100, 100 - y_length], 
-                            color=color, 
-                            linewidth=2 + (row['ValueB']/100)*4, 
-                            alpha=0.8)
-                    
-                    ax.scatter(x_pos, 100 - y_length, 
-                               s=50 + (row['ValueB']/100)*200, 
-                               color=color,
-                               alpha=0.7,
-                               edgecolors='none')
+        # Coulures verticales
+        for _ in range(random.randint(1, 3)):
+            drip_x = x + random.randint(-20, 20)
+            drip_y_end = min(HEIGHT - 10, y + random.randint(50, 150))
+            draw.line((drip_x, y, drip_x, drip_y_end), fill=(r, g, b, 180), width=random.randint(3, 6))
 
-            # --- MODE 4: GESTE (GESTURE) ---
-            elif category == 'Gesture':
-                for index, row in group.iterrows():
-                    start_x = row['ValueA']
-                    start_y = row['ValueB']
-                    
-                    x_gesture = np.linspace(start_x, start_x + random.uniform(-10, 10), 10)
-                    y_gesture = start_y + np.sin(x_gesture) * random.uniform(5, 15)
-                    
-                    ax.plot(x_gesture, y_gesture, 
-                            color='black', 
-                            linewidth=1.5, 
-                            alpha=0.7)
-            
-            else:
-                print(f"Avertissement : Catégorie '{category}' non reconnue. Elle sera ignorée.")
-                
-        except Exception as e:
-            print(f"Erreur lors du dessin de la catégorie '{category}': {e}")
-            # Continue à la catégorie suivante
-            pass
+    # 4. Effet lumière douce
+    overlay = Image.new("RGBA", image.size, (255, 255, 255, 20))
+    image = Image.alpha_composite(image, overlay)
 
-    # --- FIN DE L'ALGORITHME ---
-    
+    # 5. Sauvegarde
     try:
-        # Sauvegarde de l'image
-        plt.savefig(output_path, bbox_inches='tight', pad_inches=0)
+        final_image = image.convert("RGB")
+        final_image.save(output_path, quality=95)
     except Exception as e:
         print(f"Erreur critique lors de la sauvegarde de l'image : {e}")
-        return "" # Retourne un chemin vide en cas d'échec
-    finally:
-        # **TRÈS IMPORTANT pour Streamlit**
-        # Ferme la figure pour libérer la mémoire et éviter les crashs
-        plt.close(fig) 
+        return ""
     
-    print(f"Image générée et sauvegardée sous : {output_path}")
-    
-    # Retourne le chemin où l'image a été sauvegardée
+    print(f"Image 'Splash Art' générée et sauvegardée sous : {output_path}")
     return output_path
 
 
