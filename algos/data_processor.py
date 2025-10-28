@@ -1,7 +1,8 @@
 """
 Module de traitement des données et de génération d'art pour ANTKATHON
 Refactorisé pour une utilisation avec Streamlit.
-Utilise l'algorithme "Splash Art" basé sur Pillow (PIL) de manière déterministe.
+Utilise l'algorithme "Splash Art" (basé sur Pillow) avec couleurs HSV
+et rendu déterministe.
 """
 
 import pandas as pd
@@ -10,11 +11,10 @@ from typing import Union, Dict, Any
 import os
 import random
 import math
+import colorsys  # Ajout pour la génération de couleurs HSV
 
 # --- Imports pour la génération d'art (Pillow) ---
-# Matplotlib et Numpy ne sont plus requis pour CET algorithme
 from PIL import Image, ImageDraw
-
 
 # --- 1. Traitement des Données ---
 
@@ -32,7 +32,7 @@ def normalise_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     Raises:
         ValueError: Si les conditions (colonnes) ne sont pas remplies.
     """
-    # Nettoyer les noms de colonnes (minuscules + suppression des espaces)
+    # Nettoyer les noms de colonnes
     df.columns = [str(col).strip().lower() for col in df.columns]
     
     # Détecter colonnes numériques et textuelles
@@ -46,14 +46,15 @@ def normalise_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     # Création du DataFrame normalisé
     new_df = pd.DataFrame()
     
-    # - La première colonne texte (si elle existe) devient "Category"
-    new_df["Category"] = df[colonnes_text[0]] if len(colonnes_text) > 0 else "Inconnue"
-    # - La première colonne numérique devient "ValueA" (Coordonnees)
-    new_df["ValueA"] = df[colonnes_num[0]]
-    # - La deuxième colonne numérique devient "ValueB" (Couleur)
-    new_df["ValueB"] = df[colonnes_num[1]]
+    cat_col = colonnes_text[0] if len(colonnes_text) > 0 else "categorie_inconnue"
+    valA_col = colonnes_num[0]
+    valB_col = colonnes_num[1]
+
+    new_df["Category"] = df[cat_col] if len(colonnes_text) > 0 else "Inconnue"
+    new_df["ValueA"] = df[valA_col] # Sera 'Coordonnees'
+    new_df["ValueB"] = df[valB_col] # Sera 'Couleur'
     
-    print(f"✅ Normalisation : '{colonnes_text[0] if len(colonnes_text) > 0 else 'N/A'}' → Category, '{colonnes_num[0]}' → ValueA, '{colonnes_num[1]}' → ValueB")
+    print(f"✅ Normalisation : '{cat_col}' → Category, '{valA_col}' → ValueA, '{valB_col}' → ValueB")
     
     return new_df
 
@@ -87,7 +88,6 @@ def process_data(uploaded_file) -> Dict[str, Any]:
             return {"error": "Le fichier est vide"}
             
         # --- GESTION D'ERREUR AMÉLIORÉE ---
-        # Tenter la normalisation intelligente
         try:
             df_normalise = normalise_dataframe(df)
         except ValueError as e:
@@ -95,22 +95,21 @@ def process_data(uploaded_file) -> Dict[str, Any]:
             print(f"Erreur de normalisation : {e}")
             return {"error": f"Erreur de normalisation : {e}"}
         
-        # Si la normalisation réussit :
         return {
             "type": "csv" if filename.endswith('.csv') else "json",
             "shape": df_normalise.shape,
             "columns": df_normalise.columns.tolist(),
             "preview": df_normalise.head(5).to_dict('records'),
-            "dataframe": df_normalise  # <-- Le DF normalisé est prêt
+            "dataframe": df_normalise  # Le DF normalisé est prêt
         }
             
     except Exception as e:
-        # Erreur générale de lecture de fichier
         return {"error": f"Erreur lors de la lecture du fichier : {e}"}
 
 
 # --- 2. Génération de l'Art (Algorithme "Splash Art") ---
 
+# Fonctions utilitaires pour generate_art
 def create_gradient_background(width, height, top_color=(20, 20, 30), bottom_color=(80, 40, 100)):
     """Crée une image de fond en dégradé vertical (utilisé par generate_art)."""
     img = Image.new("RGB", (width, height), color=0)
@@ -122,7 +121,6 @@ def create_gradient_background(width, height, top_color=(20, 20, 30), bottom_col
         b = int(top_color[2] * (1 - ratio) + bottom_color[2] * ratio)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
     return img
-
 
 def draw_color_splash(draw: ImageDraw.Draw, x, y, base_color, intensity=1.0, radius=50):
     """Dessine une 'éclaboussure' de plusieurs gouttes (utilisé par generate_art)."""
@@ -139,12 +137,13 @@ def draw_color_splash(draw: ImageDraw.Draw, x, y, base_color, intensity=1.0, rad
 
         size = random.randint(2, 8)
         draw.ellipse((px - size, py - size, px + size, py + size), fill=(r, g, b))
+# Fin des fonctions utilitaires
 
 
 def generate_art(processed_data: Dict[str, Any], background_style: str = 'dark') -> str:
     """
-    Génère une œuvre d'art "Splash Art" à partir des données traitées.
-    (Utilise Pillow, non Matplotlib)
+    Génère une œuvre d'art "Splash Art" (Pillow) avec couleurs HSV
+    et rendu déterministe.
     """
     
     output_dir = "data"
@@ -157,48 +156,53 @@ def generate_art(processed_data: Dict[str, Any], background_style: str = 'dark')
 
     df = processed_data['dataframe']
     
-    # Dimensions de l'image
     WIDTH = 1000
     HEIGHT = 700
 
     # --- DÉBUT DE L'ALGORITHME "SPLASH ART" ---
     
-    # 1. Fond dégradé (le style 'dark'/'light' est ignoré ici, on utilise le dégradé par défaut)
+    # 1. Fond dégradé
     if background_style == 'light':
-        # Option pour un fond clair si vous le souhaitez
         background = create_gradient_background(WIDTH, HEIGHT, top_color=(240, 240, 230), bottom_color=(200, 200, 220))
     else:
-        # Fond sombre par défaut de l'algorithme
         background = create_gradient_background(WIDTH, HEIGHT, top_color=(20, 20, 30), bottom_color=(80, 40, 100))
 
     image = background.convert("RGBA")
     draw = ImageDraw.Draw(image, "RGBA")
 
-    # 2. Normalisation des coordonnées
+    # 2. Normalisation des données pour les axes visuels
+    # ValueA (Coordonnees) -> Position X
     min_coord = df["ValueA"].min()
     max_coord = df["ValueA"].max()
-    coord_norm = (df["ValueA"] - min_coord) / (max_coord - min_coord + 1e-9) # 1e-9 évite division par zéro
+    coord_norm = (df["ValueA"] - min_coord) / (max_coord - min_coord + 1e-9)
+    
+    # ValueB (Couleur) -> Teinte HSV
+    min_color = df["ValueB"].min()
+    max_color = df["ValueB"].max()
+    color_norm = (df["ValueB"] - min_color) / (max_color - min_color + 1e-9)
 
     # 3. Génération des splashs
     print(f"Génération de {len(df)} éléments 'splash'...")
     for i, row in df.iterrows():
 
         # --- GESTION DU RENDU DÉTERMINISTE ---
-        # Initialise le générateur aléatoire en se basant sur le contenu de la ligne
         random.seed(hash(tuple(row)))
         # --- FIN DE LA GESTION ---
 
         # Mappage des données
-        # ValueA (Coordonnees) -> Position X
         x = int(100 + coord_norm.iloc[i] * (WIDTH - 200)) 
-        # Position Y (aléatoire mais déterministe grâce au seed)
         y = random.randint(100, HEIGHT - 100)
         
-        # ValueB (Couleur) -> R, G, B
-        base = int(row["ValueB"])
-        r = int(base % 256)
-        g = int((base * 2) % 256)
-        b = int((255 - base) % 256)
+        # --- LOGIQUE DE COULEUR (HSV Arc-en-ciel) ---
+        teinte = color_norm.iloc[i] # ValueB normalisée
+        saturation = 1.0
+        valeur = 1.0
+        
+        rgb_tuple = colorsys.hsv_to_rgb(teinte, saturation, valeur)
+        r = int(rgb_tuple[0] * 255)
+        g = int(rgb_tuple[1] * 255)
+        b = int(rgb_tuple[2] * 255)
+        # --- FIN DE LA LOGIQUE DE COULEUR ---
 
         # Splash principal
         radius = random.randint(50, 120)
@@ -222,6 +226,8 @@ def generate_art(processed_data: Dict[str, Any], background_style: str = 'dark')
     except Exception as e:
         print(f"Erreur critique lors de la sauvegarde de l'image : {e}")
         return ""
+    
+    # Pas besoin de plt.close(fig), car nous n'utilisons pas Matplotlib
     
     print(f"Image 'Splash Art' générée et sauvegardée sous : {output_path}")
     return output_path
