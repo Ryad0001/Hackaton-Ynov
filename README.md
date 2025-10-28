@@ -276,7 +276,7 @@ Les fichiers dans le dossier `Dataset/` contiennent des exemples de compositions
 
 ## Auteurs
 
-Projet développé par **Oubay, Adam, Ryad et Azad** dans le cadre du Hackathon Ynov.
+Projet développé par **Oubay MOUDDEN, Adam CHOUAG, Ryad MURAD et Azad KARA** dans le cadre du Hackathon Ynov.
 
 ## Licence
 
