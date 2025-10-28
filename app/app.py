@@ -7,18 +7,16 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from algos.data_processor import process_data, generate_art, validate_file_type
 
-# Configuration de la page
 st.set_page_config(
     page_title="ANTKATHON",
-    page_icon="🎨",
+    page_icon=None,
     layout="wide"
 )
 
 def main():
-    st.title("🎨 ANTKATHON - Générateur d'Art Abstraît")
+    st.title("ANTKATHON - Générateur d'Art Abstraît")
     st.markdown("---")
     
-    # Introduction
     st.markdown("""
     Bienvenue dans l'application de génération d'art abstrait à partir de données.
     Téléversez un fichier CSV ou JSON et découvrez comment vos données peuvent devenir une œuvre d'art unique !
@@ -26,7 +24,7 @@ def main():
     
     st.markdown("---")
     
-    st.subheader("📤 Téléversement de Fichier")
+    st.subheader("Téléversement de Fichier")
     
     uploaded_file = st.file_uploader(
         "Choisissez un fichier CSV ou JSON",
@@ -36,14 +34,14 @@ def main():
     
     if uploaded_file is not None:
         if not validate_file_type(uploaded_file.name):
-            st.error("❌ Format de fichier non supporté. Veuillez téléverser un fichier CSV ou JSON.")
+            st.error("Format de fichier non supporté. Veuillez téléverser un fichier CSV ou JSON.")
         else:
             st.session_state['uploaded_file'] = uploaded_file
             st.session_state['filename'] = uploaded_file.name
             
-            st.success(f"✅ Fichier téléversé avec succès : {uploaded_file.name}")
+            st.success(f"Fichier téléversé avec succès : {uploaded_file.name}")
             
-            st.subheader("📊 Aperçu des Données")
+            st.subheader("Aperçu des Données")
             
             try:
                 processed_data = process_data(uploaded_file)
@@ -55,78 +53,67 @@ def main():
                     st.markdown(f"**Shape :** {df.shape[0]} lignes × {df.shape[1]} colonnes")
                     st.dataframe(df.head(5), use_container_width=True)
                     
-                    # Afficher les statistiques si disponibles
                     if processed_data.get('summary'):
-                        with st.expander("📈 Statistiques descriptives"):
+                        with st.expander("Statistiques descriptives"):
                             st.dataframe(pd.DataFrame(processed_data['summary']), use_container_width=True)
-                            
+                
                 elif processed_data.get('type') == 'json':
                     uploaded_file.seek(0)
                     import json
                     content = uploaded_file.read().decode('utf-8')
                     data = json.loads(content)
                     
-                    # Afficher les données JSON
                     if isinstance(data, list):
                         if len(data) > 0:
-                            # Convertir en DataFrame pour l'affichage
                             df = pd.DataFrame(data)
                             st.markdown(f"**Nombre d'éléments :** {len(data)}")
                             st.dataframe(df.head(5), use_container_width=True)
                     else:
                         st.json(data)
                 
-                # Stocker les données traitées
                 st.session_state['processed_data'] = processed_data
                 
                 st.markdown("---")
                 
-                # Section de génération
-                st.subheader("🎨 Génération de l'Œuvre d'Art")
+                st.subheader("Génération de l'Œuvre d'Art")
                 
-                # Bouton de génération
-                if st.button("✨ Générer l'Œuvre d'Art", type="primary", use_container_width=True):
-                    with st.spinner("🔄 Génération de l'œuvre d'art en cours..."):
+                if st.button("Générer l'Œuvre d'Art", type="primary", use_container_width=True):
+                    with st.spinner("Génération de l'œuvre d'art en cours..."):
                         try:
-                            # Générer l'œuvre d'art
                             art_path = generate_art(processed_data)
                             
                             if art_path and os.path.exists(art_path):
-                                st.success("✅ Génération Réussie !")
+                                st.success("Génération Réussie !")
                                 
                                 st.markdown("---")
                                 
-                                # Afficher l'œuvre d'art générée
-                                st.subheader("🎨 Votre Œuvre d'Art Générée")
+                                st.subheader("Votre Œuvre d'Art Générée")
                                 
-                                # Afficher l'image générée
                                 st.image(
                                     art_path,
                                     caption="Votre œuvre d'art générée à partir de vos données",
                                     use_container_width=True
                                 )
                                 
-                                # Bouton pour télécharger l'image
                                 with open(art_path, "rb") as img_file:
                                     st.download_button(
-                                        label="📥 Télécharger l'image",
+                                        label="Télécharger l'image",
                                         data=img_file,
                                         file_name="generated_art.png",
                                         mime="image/png",
                                         use_container_width=True
                                     )
                             else:
-                                st.error("❌ Erreur : L'image générée n'a pas pu être créée.")
+                                st.error("Erreur : L'image générée n'a pas pu être créée.")
                             
                         except Exception as e:
-                            st.error(f"❌ Erreur lors de la génération : {str(e)}")
+                            st.error(f"Erreur lors de la génération : {str(e)}")
                 
             except Exception as e:
-                st.error(f"❌ Erreur lors du traitement du fichier : {str(e)}")
+                st.error(f"Erreur lors du traitement du fichier : {str(e)}")
     
-    # Sidebar avec informations
     with st.sidebar:
-        st.header("📖 À Propos")
+        st.header("À Propos")
         st.markdown("""
         **ANTKATHON - Générateur d'Art Abstraît**
         
@@ -144,9 +131,8 @@ def main():
         """)
         
         st.markdown("---")
-        st.markdown("Fait par Oubay, Adam, Ryad et Azad")
+        st.markdown("Développé par Oubay, Adam, Ryad et Azad")
     
-    # Footer
     st.markdown("---")
     st.markdown("""<div style='text-align: center; color: #888;'>
     ANTKATHON - Transformez vos données en art abstrait
